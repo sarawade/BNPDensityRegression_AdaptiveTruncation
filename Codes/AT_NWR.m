@@ -188,8 +188,8 @@ loglike_MCMC = sum(log(sum(num_MCMC.*norm_weights_MCMC,2)));
 % Initialise log-variances of the adaptive MH for each block of
 % parameters
 tysd = zeros(n,d,d);
-LDSigmasd(:,:,j) = 0.1*eye(d*(d+1)/2);
-betasd(:,:,j) = 0.1*eye((p+q+1)*d);
+LDSigmasd = zeros(d*(d+1)/2,d*(d+1)/2,it);
+betasd = zeros((p+q+1)*d,(p+q+1)*d,it);
 tausd = zeros(p,p,it);
 musd = zeros(p,p,it);
 Vsd = ones(1,it);
@@ -198,8 +198,8 @@ for i = 1:n
     tysd(i,:,:) = 1.5*eye(d);
 end
 for j = 1:it
-    LDSigmasd(:,:,j) = eye(d*(d+1)/2);
-    betasd(:,:,j) = eye((p+q+1)*d);
+    LDSigmasd(:,:,j) = 0.1*eye(d*(d+1)/2);
+    betasd(:,:,j) = 0.1*eye((p+q+1)*d);
     tausd(:,:,j) = eye(p);
     musd(:,:,j) = eye(p);
 end
