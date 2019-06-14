@@ -44,8 +44,10 @@ for s=1:S
     for k=1:K
         %Compute unnormalised weights
         wx_sk=particles.W(s,k)*ones(n,1);
-        for j=1:p
-            wx_sk=wx_sk.*normpdf(xnew(:,j),particles.mu(s,k,j),particles.tau(s,k,j)^(-.5));
+        if p>0
+            for j=1:p
+                wx_sk=wx_sk.*normpdf(xnew(:,j),particles.mu(s,k,j),particles.tau(s,k,j)^(-.5));
+            end
         end
         if q>0
             for j=1:q

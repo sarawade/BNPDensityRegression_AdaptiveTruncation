@@ -63,12 +63,13 @@ y = zeros(numbofparts,n,d); % saved y values across particles
 % Initialize particles
 V = ones(numbofparts, top_trunc);
 mu = zeros(numbofparts, top_trunc, p);
+tau = zeros(numbofparts, top_trunc, p);
 beta_Vec = zeros(numbofparts, top_trunc, (p+q+1)*d);
 beta = zeros(numbofparts, top_trunc, (p+q+1), d);
 Sigma = zeros(numbofparts, top_trunc, d, d);
-tau = zeros(numbofparts, top_trunc, p);
-W = zeros(numbofparts, top_trunc);
+W = zeros(numbofparts, top_trunc); 
 rho = zeros(q, numbofparts, top_trunc);
+
 
 % Initialise matrices saving determinant and LDL decomposition of Sigma
 det_Sigma = zeros(numbofparts, top_trunc); % determinant of Sigma
@@ -146,11 +147,13 @@ for j = 1:it
     beta_MCMC_Vec(:,j) =reshape(beta_MCMC(:,:,j),(p+q+1)*d,1);
 end
 
-%Initial value of tau = prior sample
-tau_MCMC = gamrnd(repmat(a1',1,it),repmat(1./a2',1,it));
+if p>0
+    %Initial value of tau = prior sample
+    tau_MCMC = gamrnd(repmat(a1',1,it),repmat(1./a2',1,it));
 
-%Initial value of mu= prior sample
-mu_MCMC = repmat(mu0',1,it)+randn(p,it).*(tau_MCMC.^(-.5)).*repmat(ic'.^(-.5),1,it);
+    %Initial value of mu= prior sample
+    mu_MCMC = repmat(mu0',1,it)+randn(p,it).*(tau_MCMC.^(-.5)).*repmat(ic'.^(-.5),1,it);
+end
 
 %initial Vs for the DP are iid Beta (M is the mass parameter)
 V_MCMC = betarnd(1, M, 1, it);
@@ -162,20 +165,26 @@ for j = 1:it
     prodV = prodV * (1 - V_MCMC(j));
 end
 
-%Initial value of rho = prior sample
-rho_MCMC = zeros(q,it);
-for h = 1:q
-    aux=gamrnd(repmat(alpha_rho(:,h),1,it),1);
-    rho_MCMC(h,:)=aux(1,:)./(aux(1,:)+aux(2,:));
+if q>0
+    %Initial value of rho = prior sample
+    rho_MCMC = zeros(q,it);
+    for h = 1:q
+        aux=gamrnd(repmat(alpha_rho(:,h),1,it),1);
+        rho_MCMC(h,:)=aux(1,:)./(aux(1,:)+aux(2,:));
+    end
 end
 
 %Initial values of loglikelihood elements
 num_MCMC = zeros(n,it);
 unnorm_MCMC = zeros(n,it);
 for j = 1:it
-    unnorm_MCMC(:,j) = log(W_MCMC(j)) + log( mvnpdf(x(:,1:p),repmat(mu_MCMC(:,j)',n,1),diag(tau_MCMC(:,j).^(-1),0)) );
-    for h = 1:q
-        unnorm_MCMC(:,j) = unnorm_MCMC(:,j) + (x(:,p+h) == 1)*log(rho_MCMC(h,j))+(x(:,p+h) == 2)*log(1-rho_MCMC(h,j));
+    if p>0
+        unnorm_MCMC(:,j) = log(W_MCMC(j)) + log( mvnpdf(x(:,1:p),repmat(mu_MCMC(:,j)',n,1),diag(tau_MCMC(:,j).^(-1),0)) );
+    end
+    if q>0
+        for h = 1:q
+            unnorm_MCMC(:,j) = unnorm_MCMC(:,j) + (x(:,p+h) == 1)*log(rho_MCMC(h,j))+(x(:,p+h) == 2)*log(1-rho_MCMC(h,j));
+        end
     end
     num_MCMC(:,j) = mvnpdf(y_MCMC,X*beta_MCMC(:,:,j),Sigma_MCMC(:,:,j));
 end
@@ -190,18 +199,24 @@ loglike_MCMC = sum(log(sum(num_MCMC.*norm_weights_MCMC,2)));
 tysd = zeros(n,d,d);
 LDSigmasd = zeros(d*(d+1)/2,d*(d+1)/2,it);
 betasd = zeros((p+q+1)*d,(p+q+1)*d,it);
-tausd = zeros(p,p,it);
-musd = zeros(p,p,it);
+if p>0
+    tausd = zeros(p,p,it);
+    musd = zeros(p,p,it);
+end
 Vsd = ones(1,it);
-rhosd = ones(q,it);
+if q>0
+    rhosd = ones(q,it);
+end
 for i = 1:n
     tysd(i,:,:) = 1.5*eye(d);
 end
 for j = 1:it
     LDSigmasd(:,:,j) = 0.1*eye(d*(d+1)/2);
     betasd(:,:,j) = 0.1*eye((p+q+1)*d);
-    tausd(:,:,j) = eye(p);
-    musd(:,:,j) = eye(p);
+    if p>0
+        tausd(:,:,j) = eye(p);
+        musd(:,:,j) = eye(p);
+    end
 end
 
 %Intialise cummulative sum of transformed parameters for each block of
@@ -209,20 +224,28 @@ end
 sumty = zeros(n,d);
 sumLDSigma = zeros(d*(d+1)/2,it);
 sumbeta = zeros((p+q+1)*d,it);
-sumtau = zeros(p,it);
-summu = zeros(p,it);
+if p>0
+    sumtau = zeros(p,it);
+    summu = zeros(p,it);
+end
 sumV = zeros(1,it);
-sumrho = zeros(q,it);
+if q>0
+    sumrho = zeros(q,it);
+end
 
 %Intialise cummulative product of transformed parameters for each block of
 %parameters (used to iteratively update sd in adaptive MH)
 prodty = zeros(n,d,d);
 prodLDSigma = zeros(d*(d+1)/2,d*(d+1)/2,it);
 prodbeta = zeros((p+q+1)*d,(p+q+1)*d,it);
-prodtau = zeros(p,p,it);
-prodmu = zeros(p,p,it);
+if p>0
+    prodtau = zeros(p,p,it);
+    prodmu = zeros(p,p,it);
+end
 prodV = zeros(1,it);
-prodrho = zeros(q,it);
+if q>0
+    prodrho = zeros(q,it);
+end
 
 % Initialise new LDL decomposition in proposal of random walk
 newL_Sigma = eye(d);
@@ -240,31 +263,43 @@ Sigmaaccept = zeros(1,it);
 Sigmacount = zeros(1,it);
 betaaccept = zeros(1,it);
 betacount = zeros(1,it);
-tauaccept = zeros(1,it);
-taucount = zeros(1,it);
-muaccept = zeros(1,it);
-mucount = zeros(1,it);
+if p>0
+    tauaccept = zeros(1,it);
+    taucount = zeros(1,it);
+    muaccept = zeros(1,it);
+    mucount = zeros(1,it);
+end
 Vaccept = zeros(1,it);
 Vcount = zeros(1,it);
-rhoaccept = zeros(q,it);
-rhocount = zeros(q,it);
+if q>0
+    rhoaccept = zeros(q,it);
+    rhocount = zeros(q,it);
+end
 
 %Adaptive proposals parameters
 sd_ty = zeros(numbofits+1,n);
 sd_LDSigma = zeros(numbofits+1,it);
 sd_beta = zeros(numbofits+1,it);
-sd_tau = zeros(numbofits+1,it);
-sd_mu = zeros(numbofits+1,it);
+if p>0
+    sd_tau = zeros(numbofits+1,it);
+    sd_mu = zeros(numbofits+1,it);
+end
 sd_V = zeros(numbofits+1,it);
-sd_rho = zeros(q,numbofits+1,it);
+if q>0
+    sd_rho = zeros(q,numbofits+1,it);
+end
 
 sd_ty(1,:) = 2.4^2/d*ones(1,n);
 sd_LDSigma(1,1:it) = 2.4^2/(d*(d+1)/2);
 sd_beta(1,1:it) = 2.4^2/((p+q+1)*d);
-sd_tau(1,1:it) = 2.4^2/p;
-sd_mu(1,1:it) = 2.4^2/p;
+if p>0
+    sd_tau(1,1:it) = 2.4^2/p;
+    sd_mu(1,1:it) = 2.4^2/p;
+end
 sd_V(1,1:it) = 2.4^2;
-sd_rho(1:q,1,1:it) = 2.4^2;
+if q>0
+    sd_rho(1:q,1,1:it) = 2.4^2;
+end
 
 %Vector of adapting paramters used in every iteration
 %Apart from "accept" (ADAPT(3)) that changes
@@ -441,100 +476,103 @@ for it2 = 1:numbofits
         ADAPT(3) = accept;
         [sd_beta(it2+1,j),sumbeta(:,j),prodbeta(:,:,j),betasd(:,:,j)] = Alg6(beta_MCMC_Vec(:,j), sumbeta(:,j), prodbeta(:,:,j), betasd(:,:,j), sd_beta(it2,j), it2, ADAPT);
         
+        if p>0
         %% Update tau
         
-        % % Random walk proposal: based on log transformation
-        newtau_MCMC = tau_MCMC(:,j).* exp(randn(1,p) * cholcov(tausd(:,:,j)))';
         
-        % Compute acceptance ratio: likelihood part
-        % Only need to recompute the unnormalised and normalised weights 
-        newunnorm_MCMC(:,j) = unnorm_MCMC(:,j) - log( mvnpdf(x(:,1:p),repmat(mu_MCMC(:,j)',n,1),diag(tau_MCMC(:,j).^(-1),0)) ) + log( mvnpdf(x(:,1:p),repmat(mu_MCMC(:,j)',n,1),diag(newtau_MCMC.^(-1),0)) );
-        newnorm_weights_MCMC = exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it))./repmat(sum(exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it)),2),1,it);
-        newloglike_MCMC = sum(log(sum(num_MCMC.*newnorm_weights_MCMC,2)));
-        logaccept = newloglike_MCMC - loglike_MCMC;
+            % % Random walk proposal: based on log transformation
+            newtau_MCMC = tau_MCMC(:,j).* exp(randn(1,p) * cholcov(tausd(:,:,j)))';
         
-        % Compute acceptance ratio: prior and proposal part
-        logaccept = logaccept + (a1 + .5)*(log(newtau_MCMC) - log(tau_MCMC(:,j))) - ((.5 .* ic).*(mu_MCMC(:,j)' - mu0).^2 + a2) * (newtau_MCMC - tau_MCMC(:,j));
+            % Compute acceptance ratio: likelihood part
+            % Only need to recompute the unnormalised and normalised weights 
+            newunnorm_MCMC(:,j) = unnorm_MCMC(:,j) - log( mvnpdf(x(:,1:p),repmat(mu_MCMC(:,j)',n,1),diag(tau_MCMC(:,j).^(-1),0)) ) + log( mvnpdf(x(:,1:p),repmat(mu_MCMC(:,j)',n,1),diag(newtau_MCMC.^(-1),0)) );
+            newnorm_weights_MCMC = exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it))./repmat(sum(exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it)),2),1,it);
+            newloglike_MCMC = sum(log(sum(num_MCMC.*newnorm_weights_MCMC,2)));
+            logaccept = newloglike_MCMC - loglike_MCMC;
         
-         % Transform log acceptance ratio to probability
-        if (isreal(logaccept) == 0 )
-            stop(1);
-        end        
-        accept = 1;
-        if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
-            accept = 0;
-        elseif ( logaccept < 0 )
-            accept = exp(logaccept);
-        end
+            % Compute acceptance ratio: prior and proposal part
+            logaccept = logaccept + (a1 + .5)*(log(newtau_MCMC) - log(tau_MCMC(:,j))) - ((.5 .* ic).*(mu_MCMC(:,j)' - mu0).^2 + a2) * (newtau_MCMC - tau_MCMC(:,j));
         
-        % Average acceptance rate: update elements
-        tauaccept(j) = tauaccept(j) + accept;
-        taucount(j) = taucount(j) + 1;
+            % Transform log acceptance ratio to probability
+            if (isreal(logaccept) == 0 )
+                stop(1);
+            end        
+            accept = 1;
+            if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
+                accept = 0;
+            elseif ( logaccept < 0 )
+                accept = exp(logaccept);
+            end
         
-        % Accept/Reject Move
-        if ( rand < accept )
-            %Accept and set new values of tau and (un)normalised weights
-            tau_MCMC(:,j) = newtau_MCMC;
-            loglike_MCMC = newloglike_MCMC;
-            unnorm_MCMC(:,j) = newunnorm_MCMC(:,j);
-            norm_weights_MCMC = newnorm_weights_MCMC;
-        else
-            %Reject proposed (un)normalised weights are returned to old
-            %values
-            newunnorm_MCMC(:,j) = unnorm_MCMC(:,j);
-        end
+            % Average acceptance rate: update elements
+            tauaccept(j) = tauaccept(j) + accept;
+            taucount(j) = taucount(j) + 1;
         
-        % Update parameters of adaptive random walk
-        ADAPT(3) = accept;
-        [sd_tau(it2+1,j),sumtau(:,j),prodtau(:,:,j),tausd(:,:,j)] = Alg6(log(tau_MCMC(:,j)), sumtau(:,j), prodtau(:,:,j), tausd(:,:,j), sd_tau(it2,j), it2, ADAPT);
+            % Accept/Reject Move
+            if ( rand < accept )
+                %Accept and set new values of tau and (un)normalised weights
+                tau_MCMC(:,j) = newtau_MCMC;
+                loglike_MCMC = newloglike_MCMC;
+                unnorm_MCMC(:,j) = newunnorm_MCMC(:,j);
+                norm_weights_MCMC = newnorm_weights_MCMC;
+            else
+                %Reject proposed (un)normalised weights are returned to old
+                %values
+                newunnorm_MCMC(:,j) = unnorm_MCMC(:,j);
+            end
+        
+            % Update parameters of adaptive random walk
+            ADAPT(3) = accept;
+            [sd_tau(it2+1,j),sumtau(:,j),prodtau(:,:,j),tausd(:,:,j)] = Alg6(log(tau_MCMC(:,j)), sumtau(:,j), prodtau(:,:,j), tausd(:,:,j), sd_tau(it2,j), it2, ADAPT);
                 
-        %% Update mu
+            %% Update mu
         
-        % % Random walk proposal: no transformation needed
-        newmu_MCMC = mu_MCMC(:,j) + (randn(1,p) * cholcov(musd(:,:,j)))';
+            % % Random walk proposal: no transformation needed
+            newmu_MCMC = mu_MCMC(:,j) + (randn(1,p) * cholcov(musd(:,:,j)))';
         
-        % Compute acceptance ratio: likelihood part
-        % Only need to recompute the unnormalised and normalised weights 
-        newunnorm_MCMC(:,j) = unnorm_MCMC(:,j) - log( mvnpdf(x(:,1:p),repmat(mu_MCMC(:,j)',n,1),diag(tau_MCMC(:,j).^(-1),0)) ) + log( mvnpdf(x(:,1:p),repmat(newmu_MCMC',n,1),diag(tau_MCMC(:,j).^(-1),0)) );
-        newnorm_weights_MCMC = exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it))./repmat(sum(exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it)),2),1,it);
-        newloglike_MCMC = sum(log(sum(num_MCMC.*newnorm_weights_MCMC,2)));
-        logaccept = newloglike_MCMC - loglike_MCMC;
+            % Compute acceptance ratio: likelihood part
+            % Only need to recompute the unnormalised and normalised weights 
+            newunnorm_MCMC(:,j) = unnorm_MCMC(:,j) - log( mvnpdf(x(:,1:p),repmat(mu_MCMC(:,j)',n,1),diag(tau_MCMC(:,j).^(-1),0)) ) + log( mvnpdf(x(:,1:p),repmat(newmu_MCMC',n,1),diag(tau_MCMC(:,j).^(-1),0)) );
+            newnorm_weights_MCMC = exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it))./repmat(sum(exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it)),2),1,it);
+            newloglike_MCMC = sum(log(sum(num_MCMC.*newnorm_weights_MCMC,2)));
+            logaccept = newloglike_MCMC - loglike_MCMC;
                
-        % Compute acceptance ratio: prior and proposal part
-        logaccept = logaccept - .5 * (tau_MCMC(:,j)' .* ic) * ((newmu_MCMC - mu0').^2 - (mu_MCMC(:,j) - mu0').^2);
+            % Compute acceptance ratio: prior and proposal part
+            logaccept = logaccept - .5 * (tau_MCMC(:,j)' .* ic) * ((newmu_MCMC - mu0').^2 - (mu_MCMC(:,j) - mu0').^2);
         
-        % Transform log acceptance ratio to probability
-        if (isreal(logaccept) == 0 )
-            stop(1);
-        end        
-        accept = 1;
-        if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
-            accept = 0;
-        elseif ( logaccept < 0 )
-            accept = exp(logaccept);
-        end
+            % Transform log acceptance ratio to probability
+            if (isreal(logaccept) == 0 )
+                stop(1);
+            end        
+            accept = 1;
+            if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
+                accept = 0;
+            elseif ( logaccept < 0 )
+                accept = exp(logaccept);
+            end
         
-        % Average acceptance rate: update elements
-        muaccept(j) = muaccept(j) + accept;
-        mucount(j) = mucount(j) + 1;
+            % Average acceptance rate: update elements
+            muaccept(j) = muaccept(j) + accept;
+            mucount(j) = mucount(j) + 1;
         
-        % Accept/Reject Move
-        if ( rand < accept )
-            %Accept and set new values of mu and (un)normalised weights
-            mu_MCMC(:,j) = newmu_MCMC;
-            loglike_MCMC = newloglike_MCMC;
-            unnorm_MCMC(:,j) = newunnorm_MCMC(:,j);
-            norm_weights_MCMC = newnorm_weights_MCMC;
-        else
-            %Reject proposed (un)normalised weights are returned to old
-            %values
-            newunnorm_MCMC(:,j) = unnorm_MCMC(:,j);
-        end
+            % Accept/Reject Move
+            if ( rand < accept )
+                %Accept and set new values of mu and (un)normalised weights
+                mu_MCMC(:,j) = newmu_MCMC;
+                loglike_MCMC = newloglike_MCMC;
+                unnorm_MCMC(:,j) = newunnorm_MCMC(:,j);
+                norm_weights_MCMC = newnorm_weights_MCMC;
+            else
+                %Reject proposed (un)normalised weights are returned to old
+                %values
+                newunnorm_MCMC(:,j) = unnorm_MCMC(:,j);
+            end
         
-        % Update parameters of adaptive random walk
-        ADAPT(3) = accept;
-        [sd_mu(it2+1,j),summu(:,j),prodmu(:,:,j),musd(:,:,j)] = Alg6(mu_MCMC(:,j), summu(:,j), prodmu(:,:,j), musd(:,:,j), sd_mu(it2,j), it2, ADAPT);
-                
+            % Update parameters of adaptive random walk
+            ADAPT(3) = accept;
+            [sd_mu(it2+1,j),summu(:,j),prodmu(:,:,j),musd(:,:,j)] = Alg6(mu_MCMC(:,j), summu(:,j), prodmu(:,:,j), musd(:,:,j), sd_mu(it2,j), it2, ADAPT);
+        end 
+        
         %% Update v
         
         % % Random walk proposal: based on logit transformation
@@ -607,56 +645,58 @@ for it2 = 1:numbofits
         ADAPT(3) = accept;
         [sd_V(it2+1,j), sumV(j), prodV(j), Vsd(j)] = Alg6(log(V_MCMC(j)) - log(1 - V_MCMC(j)), sumV(j), prodV(j), Vsd(j), sd_V(it2,j), it2, ADAPT);
         
-        %% Update rho
-        for h = 1:q
-            % % Random walk proposal: based on logit transformation
-            %Transform rho
-            trans = log(rho_MCMC(h,j))-log(1-rho_MCMC(h,j));
-            newtrans = trans + randn(1,1) * cholcov(rhosd(h,j));
-            %Transform back
-            newrho_MCMC = exp(newtrans) / (1 + exp(newtrans));
+        if q>0
+            %% Update rho
+            for h = 1:q
+                % % Random walk proposal: based on logit transformation
+                %Transform rho
+                trans = log(rho_MCMC(h,j))-log(1-rho_MCMC(h,j));
+                newtrans = trans + randn(1,1) * cholcov(rhosd(h,j));
+                %Transform back
+                newrho_MCMC = exp(newtrans) / (1 + exp(newtrans));
                 
-            % Compute acceptance ratio: likelihood part
-            % Only need to recompute the unnormalised and normalised weights 
-            newunnorm_MCMC(:,j) = newunnorm_MCMC(:,j) + (x(:,p+h) == 1)*( - log(rho_MCMC(h,j)) + log(newrho_MCMC) )+(x(:,p+h) == 2)*( - log(1-rho_MCMC(h,j)) + log(1-newrho_MCMC) );
-            newnorm_weights_MCMC = exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it))./repmat(sum(exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it)),2),1,it);
-            newloglike_MCMC = sum(log(sum(num_MCMC.*newnorm_weights_MCMC,2)));
-            logaccept = newloglike_MCMC - loglike_MCMC;
+                % Compute acceptance ratio: likelihood part
+                % Only need to recompute the unnormalised and normalised weights 
+                newunnorm_MCMC(:,j) = newunnorm_MCMC(:,j) + (x(:,p+h) == 1)*( - log(rho_MCMC(h,j)) + log(newrho_MCMC) )+(x(:,p+h) == 2)*( - log(1-rho_MCMC(h,j)) + log(1-newrho_MCMC) );
+                newnorm_weights_MCMC = exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it))./repmat(sum(exp(newunnorm_MCMC - repmat(max(newunnorm_MCMC,[],2),1,it)),2),1,it);
+                newloglike_MCMC = sum(log(sum(num_MCMC.*newnorm_weights_MCMC,2)));
+                logaccept = newloglike_MCMC - loglike_MCMC;
                 
-            % Compute acceptance ratio: prior and proposal part
-            logaccept = logaccept + sum( alpha_rho(:,h).*([log(newrho_MCMC);log(1-newrho_MCMC)] - [log(rho_MCMC(h,j));log(1-rho_MCMC(h,j))]) );
+                % Compute acceptance ratio: prior and proposal part
+                logaccept = logaccept + sum( alpha_rho(:,h).*([log(newrho_MCMC);log(1-newrho_MCMC)] - [log(rho_MCMC(h,j));log(1-rho_MCMC(h,j))]) );
                 
-            % Transform log acceptance ratio to probability
-            if (isreal(logaccept) == 0 )
-                stop(1);
-            end        
-            accept = 1;
-            if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
+                % Transform log acceptance ratio to probability
+                if (isreal(logaccept) == 0 )
+                    stop(1);
+                end        
+                accept = 1;
+                if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
                 accept = 0;
-            elseif ( logaccept < 0 )
-                accept = exp(logaccept);
-            end
+                elseif ( logaccept < 0 )
+                    accept = exp(logaccept);
+                end
         
-            % Average acceptance rate: update elements  
-            rhoaccept(h,j) = rhoaccept(h,j) + accept;
-            rhocount(h,j) = rhocount(h,j) + 1;
+                % Average acceptance rate: update elements  
+                rhoaccept(h,j) = rhoaccept(h,j) + accept;
+                rhocount(h,j) = rhocount(h,j) + 1;
             
-            % Accept/Reject Move
-            if ( rand < accept )
-                %Accept and set new values of rho and (un)normalised weights
-                rho_MCMC(h,j) = newrho_MCMC;
-                loglike_MCMC = newloglike_MCMC;
-                unnorm_MCMC(:,j) = newunnorm_MCMC(:,j);
-                norm_weights_MCMC = newnorm_weights_MCMC;
-            else
-                %Reject proposed (un)normalised weights are returned to old
-                %values            
-                newunnorm_MCMC(:,j) = unnorm_MCMC(:,j);
+                % Accept/Reject Move
+                if ( rand < accept )
+                    %Accept and set new values of rho and (un)normalised weights
+                    rho_MCMC(h,j) = newrho_MCMC;
+                    loglike_MCMC = newloglike_MCMC;
+                    unnorm_MCMC(:,j) = newunnorm_MCMC(:,j);
+                    norm_weights_MCMC = newnorm_weights_MCMC;
+                else
+                    %Reject proposed (un)normalised weights are returned to old
+                    %values            
+                    newunnorm_MCMC(:,j) = unnorm_MCMC(:,j);
+                end
+            
+                % Update parameters of adaptive random walk
+                ADAPT(3) = accept;
+                [sd_rho(h,it2+1,j), sumrho(h,j), prodrho(h,j), rhosd(h,j)] = Alg6(log(rho_MCMC(h,j)) - log(1-rho_MCMC(h,j)), sumrho(h,j), prodrho(h,j), rhosd(h,j), sd_rho(h,it2,j), it2, ADAPT);
             end
-            
-            % Update parameters of adaptive random walk
-            ADAPT(3) = accept;
-            [sd_rho(h,it2+1,j), sumrho(h,j), prodrho(h,j), rhosd(h,j)] = Alg6(log(rho_MCMC(h,j)) - log(1-rho_MCMC(h,j)), sumrho(h,j), prodrho(h,j), rhosd(h,j), sd_rho(h,it2,j), it2, ADAPT);
         end
     end
     
@@ -665,11 +705,15 @@ for it2 = 1:numbofits
         disp(['it2 = ' num2str(it2)]);
         disp(['Sigma accept: avg = ' num2str(mean(Sigmaaccept./Sigmacount)),', min = ',num2str(min(Sigmaaccept./Sigmacount)), ', max = ',num2str(max(Sigmaaccept./Sigmacount))]);
         disp(['beta accept: avg = ' num2str(mean(betaaccept./betacount)), ', min = ',num2str(min(betaaccept./betacount)), ', max = ',num2str(max(betaaccept./betacount))]);
-        disp(['tau accept: avg = ' num2str(mean(tauaccept./taucount)), ', min = ',num2str(min(tauaccept./taucount)),', max = ',num2str(max(tauaccept./taucount))]);
-        disp(['mu accept: avg = ' num2str(mean(muaccept./mucount)), ', min = ',num2str(min(muaccept./mucount)), ', max = ',num2str(max(muaccept./mucount))]);
+        if p>0
+            disp(['tau accept: avg = ' num2str(mean(tauaccept./taucount)), ', min = ',num2str(min(tauaccept./taucount)),', max = ',num2str(max(tauaccept./taucount))]);
+            disp(['mu accept: avg = ' num2str(mean(muaccept./mucount)), ', min = ',num2str(min(muaccept./mucount)), ', max = ',num2str(max(muaccept./mucount))]);
+        end
         disp(['V accept: avg = ' num2str(mean(Vaccept(1:end-1)./Vcount(1:end-1))), ', min = ',num2str(min(Vaccept(1:end-1)./Vcount(1:end-1))), ', max = ',num2str(max(Vaccept(1:end-1)./Vcount(1:end-1)))]);
-        for h = 1:q
-            disp(['rho_',num2str(h),' accept: avg = ' num2str(mean(rhoaccept(h,:)./rhocount(h,:))), ', min = ', num2str(min(rhoaccept(h,:)./rhocount(h,:))),', max = ', num2str(max(rhoaccept(h,:)./rhocount(h,:)))]);
+        if q>0
+            for h = 1:q
+                disp(['rho_',num2str(h),' accept: avg = ' num2str(mean(rhoaccept(h,:)./rhocount(h,:))), ', min = ', num2str(min(rhoaccept(h,:)./rhocount(h,:))),', max = ', num2str(max(rhoaccept(h,:)./rhocount(h,:)))]);
+            end
         end
         disp(['y accept: avg = ' num2str(mean(tyaccept./tycount)), ', min = ',num2str(min(tyaccept./tycount)), ', max = ',num2str(max(tyaccept./tycount))]);
         disp(' ');
@@ -700,15 +744,19 @@ for it2 = 1:numbofits
                 beta(iter_aux, 1:it, i1, i2) = beta_MCMC(i1, i2, :);
             end
         end
-        for i1 = 1:p
-            tau(iter_aux, 1:it, i1) = tau_MCMC(i1,:);
-            mu(iter_aux, 1:it, i1) = mu_MCMC(i1,:);
-        end        
+        if p>0
+            for i1 = 1:p
+                tau(iter_aux, 1:it, i1) = tau_MCMC(i1,:);
+                mu(iter_aux, 1:it, i1) = mu_MCMC(i1,:);
+            end 
+        end
         V(iter_aux, 1:it) = V_MCMC;
         W(iter_aux, 1:it) = W_MCMC;
-        for h = 1:q
-            for j = 1:it
-                rho(h,iter_aux,j) = rho_MCMC(h,j);
+        if q>0
+            for h = 1:q
+                for j = 1:it
+                    rho(h,iter_aux,j) = rho_MCMC(h,j);
+                end
             end
         end
         num(iter_aux,:,1:it) = num_MCMC;
@@ -731,21 +779,33 @@ mean_W = mean_W/sum(mean_W); %normalize
 %compute average
 aux_LDSigmasd = zeros(d*(d+1)/2,d*(d+1)/2);
 aux_betasd = zeros((p+q+1)*d,(p+q+1)*d);
-aux_tausd = zeros(p,p);
-aux_musd = zeros(p,p);
-aux_rhosd = zeros(1,q);
+if p>0
+    aux_tausd = zeros(p,p);
+    aux_musd = zeros(p,p);
+end
+if q>0
+    aux_rhosd = zeros(1,q);
+end
 for j = 1:it
     aux_LDSigmasd = aux_LDSigmasd + LDSigmasd(:,:,j)*mean_W(j);
     aux_betasd = aux_betasd + betasd(:,:,j)*mean_W(j);
-    aux_tausd = aux_tausd + tausd(:,:,j)*mean_W(j);
-    aux_musd = aux_musd + musd(:,:,j)*mean_W(j);
-    aux_rhosd = aux_rhosd+ rhosd(:,j)'* mean_W(j);
+    if p>0
+        aux_tausd = aux_tausd + tausd(:,:,j)*mean_W(j);
+        aux_musd = aux_musd + musd(:,:,j)*mean_W(j);
+    end
+    if q>0
+        aux_rhosd = aux_rhosd+ rhosd(:,j)'* mean_W(j);
+    end
 end
 LDSigmasd = aux_LDSigmasd;
 betasd = aux_betasd;
-tausd = aux_tausd;
-musd = aux_musd;
-rhosd = aux_rhosd;
+if p>0
+    tausd = aux_tausd;
+    musd = aux_musd;
+end
+if q>0
+    rhosd = aux_rhosd;
+end
 Vsd = sum(Vsd.* mean_W);
 % Note: ysd is the same, as it doesn't depend on components
 
@@ -792,16 +852,20 @@ while ( check_trunc == 0 && it < top_trunc )
         beta_Vec(part, it, :) = beta0_Vec + (randn(1,(p+q+1)*d) * cholcov(Kron_Sj))';
         beta(part, it, :, :) = reshape(beta_Vec(part, it, :),(p+q+1),d);
     end
-    tau(:, it, :) = gamrnd(repmat(a1,numbofparts,1),repmat(1./a2,numbofparts,1));
-    mu(:, it, :) = repmat(mu0,numbofparts,1) + (squeeze(tau(:, it, :)).^(-.5)).*repmat(ic.^(-.5),numbofparts,1).* randn(numbofparts, p);
+    if p>0
+        tau(:, it, :) = gamrnd(repmat(a1,numbofparts,1),repmat(1./a2,numbofparts,1));
+        mu(:, it, :) = repmat(mu0,numbofparts,1) + (squeeze(tau(:, it, :)).^(-.5)).*repmat(ic.^(-.5),numbofparts,1).* randn(numbofparts, p);
+    end
     %Finite mixture originated from SB process
     V(:, it) = betarnd(1, M, numbofparts, 1);
     %Update the weight including the new particle
     W(:,it) = V(:,it) .* (1-V(:,it-1)) ./ V(:,it-1) .* W(:,it-1);
-    for h = 1:q
-        for h1 = 1:numbofparts
-            aux = gamrnd(alpha_rho(:,h),1);
-            rho(h, h1, it) = aux(1)/sum(aux);
+    if q>0
+        for h = 1:q
+            for h1 = 1:numbofparts
+                aux = gamrnd(alpha_rho(:,h),1);
+                rho(h, h1, it) = aux(1)/sum(aux);
+            end
         end
     end
     
@@ -810,9 +874,13 @@ while ( check_trunc == 0 && it < top_trunc )
     for part = 1:numbofparts
         
         % Compute unnormalised weight of the new component for each particle
-        unnorm(part,:,it) = log(W(part,it)) + log( mvnpdf(x(:,1:p),repmat(squeeze(mu(part,it,:))',n,1),diag(squeeze(tau(part,it,:)).^(-1),0)) );
-        for h = 1:q
-            unnorm(part,:,it) = unnorm(part,:,it) + (x(:,p+h) == 1)'*log(rho(h,part,it))+ (x(:,p+h) == 2)'*log(1-rho(h,part,it));
+        if p>0
+            unnorm(part,:,it) = log(W(part,it)) + log( mvnpdf(x(:,1:p),repmat(squeeze(mu(part,it,:))',n,1),diag(squeeze(tau(part,it,:)).^(-1),0)) );
+        end
+        if q>0
+            for h = 1:q
+                unnorm(part,:,it) = unnorm(part,:,it) + (x(:,p+h) == 1)'*log(rho(h,part,it))+ (x(:,p+h) == 2)'*log(1-rho(h,part,it));
+            end
         end
         % Compute the local likelihood of the new component for each particle
         if d==1
@@ -880,11 +948,15 @@ while ( check_trunc == 0 && it < top_trunc )
         diag_D(:, 1:it, :) = diag_D(partstar, 1:it, :);
         beta_Vec(:, 1:it, :) = beta_Vec(partstar, 1:it, :);
         beta(:, 1:it, :, :) = beta(partstar, 1:it, :, :);
-        tau(:, 1:it, :) = tau(partstar, 1:it, :);
-        mu(:, 1:it, :) = mu(partstar, 1:it, :);
+        if p>0
+            tau(:, 1:it, :) = tau(partstar, 1:it, :);
+            mu(:, 1:it, :) = mu(partstar, 1:it, :);
+        end
         V(:, 1:it) = V(partstar, 1:it);
         W(:, 1:it) = W(partstar, 1:it);
-        rho(:,:,1:it) = rho(:,partstar,1:it);
+        if q>0
+            rho(:,:,1:it) = rho(:,partstar,1:it);
+        end
         loglike = newloglike(partstar);
         
         %If resampling, all the weights are the same (hence later
@@ -908,14 +980,18 @@ while ( check_trunc == 0 && it < top_trunc )
         Sigmacount = 0;
         betaaccept = 0;
         betacount = 0;
-        tauaccept = 0;
-        taucount = 0;
-        muaccept = 0;
-        mucount = 0;
+        if p>0
+            tauaccept = 0;
+            taucount = 0;
+            muaccept = 0;
+            mucount = 0;
+        end
         Vaccept = 0;
         Vcount = 0;
-        rhoaccept = zeros(1,q);
-        rhocount = zeros(1,q);
+        if q>0
+            rhoaccept = zeros(1,q);
+            rhocount = zeros(1,q);
+        end
         
         %MCMC step
         %Perform numbofMCMC for each particle
@@ -1049,84 +1125,86 @@ while ( check_trunc == 0 && it < top_trunc )
                         newnum(part,:,j) = num(part,:,j);
                     end
                     
-                    %Update tau%
-                    %Propose new value from lognormal proposal
-                    if p==1
-                        tau_aux = tau(part,j,:);
-                        mu_aux = mu(part,j,:);
-                    else
-                        tau_aux = squeeze(tau(part,j,:))';
-                        mu_aux = squeeze(mu(part,j,:))';
-                    end
-                    newtau = tau_aux.* exp(randn(1,p) * cholcov(tausd));
+                    if p>0
+                        %Update tau%
+                        %Propose new value from lognormal proposal
+                        if p==1
+                            tau_aux = tau(part,j,:);
+                            mu_aux = mu(part,j,:);
+                        else
+                            tau_aux = squeeze(tau(part,j,:))';
+                            mu_aux = squeeze(mu(part,j,:))';
+                        end
+                        newtau = tau_aux.* exp(randn(1,p) * cholcov(tausd));
                     
-                    %Compute new loglikelihood
-                    newunnorm(part,:,j) = unnorm(part,:,j) + ( - log(mvnpdf(x(:,1:p),repmat(mu_aux,n,1),diag((tau_aux).^(-1),0))) + log(mvnpdf(x(:,1:p),repmat(mu_aux,n,1),diag(newtau.^(-1),0))) )';
-                    newnorm_weights = exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it))./repmat(sum(exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it)),2),1,it);
-                    newloglike(part) = sum(log(sum(squeeze(num(part,:,1:it)).*newnorm_weights,2)));
+                        %Compute new loglikelihood
+                        newunnorm(part,:,j) = unnorm(part,:,j) + ( - log(mvnpdf(x(:,1:p),repmat(mu_aux,n,1),diag((tau_aux).^(-1),0))) + log(mvnpdf(x(:,1:p),repmat(mu_aux,n,1),diag(newtau.^(-1),0))) )';
+                        newnorm_weights = exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it))./repmat(sum(exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it)),2),1,it);
+                        newloglike(part) = sum(log(sum(squeeze(num(part,:,1:it)).*newnorm_weights,2)));
                     
-                    %Compute acceptance ratio
-                    %Loglikelihood part
-                    logaccept = newloglike(part) - loglike(part);                    
-                    %Prior and proposal part
-                    logaccept = logaccept + (a1 + .5) * (log(newtau) - log(tau_aux))' - (.5 .* ic .* (mu_aux - mu0).^2 + a2) * (newtau-tau_aux)';
-                    accept = 1;
-                    if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
-                        accept = 0;
-                    elseif ( logaccept < 0 )
-                        accept = exp(logaccept);
-                    end                    
-                    tauaccept = tauaccept + accept;
-                    taucount = taucount + 1;
+                        %Compute acceptance ratio
+                        %Loglikelihood part
+                        logaccept = newloglike(part) - loglike(part);                    
+                        %Prior and proposal part
+                        logaccept = logaccept + (a1 + .5) * (log(newtau) - log(tau_aux))' - (.5 .* ic .* (mu_aux - mu0).^2 + a2) * (newtau-tau_aux)';
+                        accept = 1;
+                        if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
+                            accept = 0;
+                        elseif ( logaccept < 0 )
+                            accept = exp(logaccept);
+                        end                    
+                        tauaccept = tauaccept + accept;
+                        taucount = taucount + 1;
                     
-                    % Accept/Reject proposal
-                    if ( rand < accept )
-                        tau(part,j,:) = newtau;
-                        loglike(part) = newloglike(part);
-                        unnorm(part,:,j) = newunnorm(part,:,j);
-                        norm_weights(part,:,1:it) = newnorm_weights;
-                    else
-                        newunnorm(part,:,j) = unnorm(part,:,j);
-                    end
+                        % Accept/Reject proposal
+                        if ( rand < accept )
+                            tau(part,j,:) = newtau;
+                            loglike(part) = newloglike(part);
+                            unnorm(part,:,j) = newunnorm(part,:,j);
+                            norm_weights(part,:,1:it) = newnorm_weights;
+                        else
+                            newunnorm(part,:,j) = unnorm(part,:,j);
+                        end
                                        
-                    %Update mu%
-                    %Propose new mu from multivariate normal proposal
-                    if p==1
-                        tau_aux = tau(part,j,1);
-                        mu_aux = mu(part,j,1);
-                    else
-                        tau_aux = squeeze(tau(part,j,:))';
-                        mu_aux = squeeze(mu(part,j,:))';
-                    end
-                    newmu = mu_aux + randn(1,p) * cholcov(musd);
+                        %Update mu%
+                        %Propose new mu from multivariate normal proposal
+                        if p==1
+                            tau_aux = tau(part,j,1);
+                            mu_aux = mu(part,j,1);
+                        else
+                            tau_aux = squeeze(tau(part,j,:))';
+                            mu_aux = squeeze(mu(part,j,:))';
+                        end
+                        newmu = mu_aux + randn(1,p) * cholcov(musd);
                     
-                    %Compute new loglikelihood
-                    newunnorm(part,:,j) = unnorm(part,:,j) + ( - log(mvnpdf(x(:,1:p),repmat(mu_aux,n,1),diag(tau_aux.^(-1),0))) + log(mvnpdf(x(:,1:p),repmat(newmu,n,1),diag(tau_aux.^(-1),0))) )';
-                    newnorm_weights = exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it))./repmat(sum(exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it)),2),1,it);
-                    newloglike(part) = sum(log(sum(squeeze(num(part,:,1:it)).*newnorm_weights,2)));
+                        %Compute new loglikelihood
+                        newunnorm(part,:,j) = unnorm(part,:,j) + ( - log(mvnpdf(x(:,1:p),repmat(mu_aux,n,1),diag(tau_aux.^(-1),0))) + log(mvnpdf(x(:,1:p),repmat(newmu,n,1),diag(tau_aux.^(-1),0))) )';
+                        newnorm_weights = exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it))./repmat(sum(exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it)),2),1,it);
+                        newloglike(part) = sum(log(sum(squeeze(num(part,:,1:it)).*newnorm_weights,2)));
                     
-                    %Compute acceptance ratio
-                    %Loglikelihood part
-                    logaccept = newloglike(part) - loglike(part);
-                    %Prior and proposal part
-                    logaccept = logaccept - .5 * (tau_aux .* ic) * ((newmu - mu0).^2 - (mu_aux - mu0).^2)' ;                    
-                    accept = 1;
-                    if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
-                        accept = 0;
-                    elseif ( logaccept < 0 )
-                        accept = exp(logaccept);
-                    end                    
-                    muaccept = muaccept + accept;
-                    mucount = mucount + 1;
+                        %Compute acceptance ratio
+                        %Loglikelihood part
+                        logaccept = newloglike(part) - loglike(part);
+                        %Prior and proposal part
+                        logaccept = logaccept - .5 * (tau_aux .* ic) * ((newmu - mu0).^2 - (mu_aux - mu0).^2)' ;                    
+                        accept = 1;
+                        if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
+                            accept = 0;
+                        elseif ( logaccept < 0 )
+                            accept = exp(logaccept);
+                        end                    
+                        muaccept = muaccept + accept;
+                        mucount = mucount + 1;
                     
-                    %Accept/Reject proposal
-                    if ( rand < accept )
-                        mu(part, j, :) = newmu;
-                        loglike(part) = newloglike(part);
-                        unnorm(part,:,j) = newunnorm(part,:,j);
-                        norm_weights(part,:,1:it) = newnorm_weights;
-                    else
-                        newunnorm(part,:,j) = unnorm(part,:,j);
+                        %Accept/Reject proposal
+                        if ( rand < accept )
+                            mu(part, j, :) = newmu;
+                            loglike(part) = newloglike(part);
+                            unnorm(part,:,j) = newunnorm(part,:,j);
+                            norm_weights(part,:,1:it) = newnorm_weights;
+                        else
+                            newunnorm(part,:,j) = unnorm(part,:,j);
+                        end
                     end
                                        
                     %Update V%
@@ -1187,41 +1265,43 @@ while ( check_trunc == 0 && it < top_trunc )
                     end
                     
                     %Update rho%
-                    for h = 1:q
-                        %Propose new rho from a logistic normal 
-                        trans = log(rho(h,part,j)) - log(1-rho(h,part,j));
-                        newtrans = trans + randn(1,1) * cholcov(rhosd(h));
-                        newrho= exp(newtrans) / (1 + exp(newtrans));
+                    if q>0
+                        for h = 1:q
+                            %Propose new rho from a logistic normal 
+                            trans = log(rho(h,part,j)) - log(1-rho(h,part,j));
+                            newtrans = trans + randn(1,1) * cholcov(rhosd(h));
+                            newrho= exp(newtrans) / (1 + exp(newtrans));
                             
-                        %New log-likelihood
-                        newunnorm(part,:,j) = newunnorm(part,:,j) + (x(:,p+h) == 1)'*( - log(rho(h,part,j)) + log(newrho))+ (x(:,p+h) == 2)'*( - log(1-rho(h,part,j)) + log(1-newrho));
-                        newnorm_weights = exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it))./repmat(sum(exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it)),2),1,it);
-                        newloglike(part) = sum(log(sum(squeeze(num(part,:,1:it)).*newnorm_weights,2)));
+                            %New log-likelihood
+                            newunnorm(part,:,j) = newunnorm(part,:,j) + (x(:,p+h) == 1)'*( - log(rho(h,part,j)) + log(newrho))+ (x(:,p+h) == 2)'*( - log(1-rho(h,part,j)) + log(1-newrho));
+                            newnorm_weights = exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it))./repmat(sum(exp(squeeze(newunnorm(part,:,1:it)) - repmat(max(squeeze(newunnorm(part,:,1:it)),[],2),1,it)),2),1,it);
+                            newloglike(part) = sum(log(sum(squeeze(num(part,:,1:it)).*newnorm_weights,2)));
                             
-                        %Compute acceptance ratio:
-                        %log-likelihood part
-                        logaccept = newloglike(part) - loglike(part);                            
-                        %Prior part and proposal part
-                        logaccept = logaccept + sum( alpha_rho(:,h).*([log(newrho_MCMC);log(1-newrho_MCMC)] - [log(rho(h,part,j)); log(1-rho(h,part,j))]) );
-                        accept = 1;
-                        if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
-                            accept = 0;
-                        elseif ( logaccept < 0 )
-                            accept = exp(logaccept);
-                        end
-                        rhoaccept(h) = rhoaccept(h) + accept;
-                        rhocount(h) = rhocount(h) + 1;
+                            %Compute acceptance ratio:
+                            %log-likelihood part
+                            logaccept = newloglike(part) - loglike(part);                            
+                            %Prior part and proposal part
+                            logaccept = logaccept + sum( alpha_rho(:,h).*([log(newrho_MCMC);log(1-newrho_MCMC)] - [log(rho(h,part,j)); log(1-rho(h,part,j))]) );
+                            accept = 1;
+                            if ( (isnan(logaccept) == 1) || (isinf(logaccept) == 1) )
+                                accept = 0;
+                            elseif ( logaccept < 0 )
+                                accept = exp(logaccept);
+                            end
+                            rhoaccept(h) = rhoaccept(h) + accept;
+                            rhocount(h) = rhocount(h) + 1;
                          
-                        %Accept/Reject proposal
-                        if ( rand < accept )
-                        	rho(h,part,j) = newrho;
-                            loglike(part) = newloglike(part);
-                            unnorm(part,:,j) = newunnorm(part,:,j);
-                            norm_weights(part,:,1:it) = newnorm_weights;
-                        else
-                            newunnorm(part,:,j) = unnorm(part,:,j);
-                        end
-                    end                  
+                            %Accept/Reject proposal
+                            if ( rand < accept )
+                                rho(h,part,j) = newrho;
+                                loglike(part) = newloglike(part);
+                                unnorm(part,:,j) = newunnorm(part,:,j);
+                                norm_weights(part,:,1:it) = newnorm_weights;
+                            else
+                                newunnorm(part,:,j) = unnorm(part,:,j);
+                            end
+                        end 
+                    end
                 end
                                 
                 %Displaying the values every ten iterations
@@ -1231,8 +1311,10 @@ while ( check_trunc == 0 && it < top_trunc )
                     disp(['part = ' num2str(part)]);
                     disp(['Sigma accept: ' num2str(Sigmaaccept./Sigmacount)]);
                     disp(['beta accept: ' num2str(betaaccept./betacount)]);
-                    disp(['tau accept: ' num2str(tauaccept./taucount)]);
-                    disp(['mu accept: ' num2str(muaccept./mucount)]);
+                    if p>0
+                        disp(['tau accept: ' num2str(tauaccept./taucount)]);
+                        disp(['mu accept: ' num2str(muaccept./mucount)]);
+                    end
                     disp(['V accept: ' num2str(Vaccept./Vcount)]);
                     if q>0
                         for h = 1:q
@@ -1246,10 +1328,12 @@ while ( check_trunc == 0 && it < top_trunc )
         end
                 
         %Display acceptance rates
-        disp(['mu accept = ' num2str(muaccept/mucount)]);
         disp(['Sigma accept = ' num2str(Sigmaaccept/Sigmacount)]);
         disp(['beta accept = ' num2str(betaaccept/betacount)]);
-        disp(['tau accept = ' num2str(tauaccept/taucount)]);
+        if p>0
+            disp(['tau accept = ' num2str(tauaccept/taucount)]);
+            disp(['mu accept = ' num2str(muaccept/mucount)]);
+        end
         disp(['V accept = ' num2str(Vaccept/Vcount)]);
         if q>0
             disp(['rho accept = ' num2str(rhoaccept./rhocount)]);
@@ -1273,11 +1357,15 @@ end
 
 
 %Save output
-rho=rho(:,:,1:it);
+if q>0
+    rho=rho(:,:,1:it);
+end
 Sigma = Sigma(:,1:it,:,:);
 beta = beta(:,1:it,:,:);
-tau = tau(:,1:it,:);
-mu = mu(:,1:it,:);
+if p>0
+    tau = tau(:,1:it,:);
+    mu = mu(:,1:it,:);
+end
 V = V(:,1:it);
 W = W(:,1:it);
 loglike_MCMC = loglike_MCMC_save;

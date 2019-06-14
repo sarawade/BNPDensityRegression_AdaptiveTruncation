@@ -61,6 +61,7 @@ U_iC=gprior*inv(X'*X)/(min(diag(Sigma0))/(nu-d-1));
 
 
 %% Set prior parameters for covariate dependent weights
+
 % Prior for parameters of continuous covariate is Normal-Gamma
 % mu|tau is Normal with mean mu0 and variance (ic*tau)^{-1}
 % tau is Gamma with parameters a1 and a2
@@ -69,11 +70,13 @@ a1 = 2*ones(1,p);
 a2 = ones(1,p);
 ic = 1/2*ones(1,p);
 
-for i = 1:p
-    %Fix mu0 at empirical mean
-    mu0(i) = mean(x(:,i));
-    % Fix a2 based on emprical range of data
-    a2(i)=ic(i)*((max(x(:,i))-min(x(:,i)))/4)^2;
+if p>0
+    for i = 1:p
+        %Fix mu0 at empirical mean
+        mu0(i) = mean(x(:,i));
+        % Fix a2 based on emprical range of data
+        a2(i)=ic(i)*((max(x(:,i))-min(x(:,i)))/4)^2;
+    end   
 end
 
 % Prior for parameters of binary expanded categorical covariates is Beta
