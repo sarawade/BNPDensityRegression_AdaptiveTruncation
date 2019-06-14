@@ -50,7 +50,7 @@ mcmcsmc = struct('start_trunc', start_trunc, 'numbofparts', numbofparts, 'epsilo
 
 % Default: empirical priors
 gprior=10; %constant in gprior
-hyperparameters=empiricalhyperparameters(x,z,c,p,q,gprior);
+hyperparameters=empiricalhyperparameters(x(:,1:p),z,c,p,0,gprior);
 
 % Can re-specify any parameters: 
 % for multivariate linear regression compoenets: beta0, U_iC, Sigma0, nu
@@ -60,7 +60,7 @@ hyperparameters=empiricalhyperparameters(x,z,c,p,q,gprior);
 % e.g. hyperparameters.M=2;
 
 %% Run algorithm
-[particles, logweight, loglike_MCMC, loglike_SMC, ESS_SMC] = AT_NWR(z, c, x, p, q, mcmcsmc, hyperparameters);
+[particles, logweight, loglike_MCMC, loglike_SMC, ESS_SMC] = AT_NWR(z, c, x(:,1:p), p, 0, mcmcsmc, hyperparameters);
         
 %% Traceplots
 S = mcmcsmc.numbofparts;
