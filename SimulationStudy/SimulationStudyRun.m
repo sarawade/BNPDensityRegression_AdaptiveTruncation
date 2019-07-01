@@ -183,13 +183,13 @@ for id=1:b
 end
 
 % Plot heat maps of the density estimates
-raffamap=Raffa(20,1); %color map for heat map
+mycolors=mycolormap(20,1); %color map for heat map
 titlez=['$Z_1$ for ';'$Z_2$ for '];
 for id=1:b
     figure
     for j=1:6
     subplot(2,3,j)
-    colormap(raffamap)
+    colormap(mycolors)
     % density heat map
     imagesc(x1_grid, zgrid(:,id)',fz(catnewind(:,j)==1,:,id)')
     set(gca,'Ydir','normal');
@@ -319,12 +319,12 @@ for idx=1:length(x1c)
 end
 
 % Plot heat maps of the conditional density estimates
-raffamap=Raffa(20,1); %color map for heat map
+mycolors=mycolormap(20,1); %color map for heat map
 for idx=1:length(x1c)
     figure
     for j=1:6
     subplot(2,3,j)
-    colormap(raffamap)
+    colormap(mycolors)
     % density heat map
     imagesc(z2gridc, z1gridc,squeeze(zcdens(catnewindc(:,j)==1&xnewc(:,1)==x1c(idx),:,:))')
     set(gca,'Ydir','normal');
