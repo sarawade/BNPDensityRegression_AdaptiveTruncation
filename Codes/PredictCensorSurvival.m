@@ -61,7 +61,7 @@ for s=1:S
         %Update predictions with weighted component specific mean
         for id=1:b
             % Compute censor probability
-            aux_nocensor_s=(normcdf((log(xnew(:,1))-mean_sk(:,id))/sqrt(particles.Sigma(s,k,id,id))));
+            aux_nocensor_s=(normcdf((log(xnew(:,1)+1)-mean_sk(:,id))/sqrt(particles.Sigma(s,k,id,id))));
             censorprob_s(:,id)=censorprob_s(:,id)+wx_sk.*(1-aux_nocensor_s);
             % Compute survival
             aux_survival_s=normcdf((repmat(log(zgrid(:,id)'),n,1)-repmat(mean_sk(:,id),1,lgrid))/sqrt(particles.Sigma(s,k,id,id)));
